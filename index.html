@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>📖 NovelForge - AI Writing Studio</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+    <!-- Marked.js for Live Preview -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="app">
+        <!-- Top Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <h1>📖 NovelForge</h1>
+                <span class="badge">AI Studio</span>
+            </div>
+            <div class="nav-tabs" id="nav-tabs">
+                <button class="nav-tab active" data-tab="dashboard">📚 Projects</button>
+                <button class="nav-tab" data-tab="editor">✍️ Write</button>
+                <button class="nav-tab" data-tab="world">🌍 World</button>
+                <button class="nav-tab" data-tab="ai">🤖 AI Assistant</button>
+                <button class="nav-tab" data-tab="reader">📖 Read</button>
+            </div>
+            <div class="nav-actions">
+                <span id="word-count-display" class="word-count-badge">0 words</span>
+                <button id="theme-toggle" class="tool-btn">🌙</button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main id="app-content">
+            <!-- Content is injected here by JavaScript -->
+        </main>
+    </div>
+
+    <!-- Modals (Hidden by default) -->
+    <div id="modal-container"></div>
+
+    <script src="db.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
