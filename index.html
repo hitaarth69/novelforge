@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>📖 NovelForge - AI Writing Studio</title>
+    <title>📖 NovelForge Pro - AI Writing Studio</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+    <!-- Marked.js for Live Preview -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- jsPDF for PDF Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -14,28 +17,27 @@
         <nav class="navbar">
             <div class="nav-brand">
                 <h1>📖 NovelForge</h1>
-                <span class="badge">AI Studio</span>
+                <span class="badge">Pro</span>
             </div>
             <div class="nav-tabs" id="nav-tabs">
                 <button class="nav-tab active" data-tab="dashboard">📚 Projects</button>
                 <button class="nav-tab" data-tab="editor">✍️ Write</button>
                 <button class="nav-tab" data-tab="world">🌍 World</button>
-                <button class="nav-tab" data-tab="ai">🤖 AI Assistant</button>
+                <button class="nav-tab" data-tab="ai">🤖 AI</button>
                 <button class="nav-tab" data-tab="reader">📖 Read</button>
             </div>
             <div class="nav-actions">
                 <span id="word-count-display" class="word-count-badge">0 words</span>
+                <span id="streak-display" class="word-count-badge" style="background:rgba(245,158,11,0.1);color:#f59e0b;">🔥 0</span>
                 <button id="theme-toggle" class="tool-btn">🌙</button>
             </div>
         </nav>
 
-        <!-- Main Content Area -->
-        <main id="app-content">
-            <!-- Content is injected here by JavaScript -->
-        </main>
+        <!-- Main Content -->
+        <main id="app-content"></main>
     </div>
 
-    <!-- Modals (Hidden by default) -->
+    <!-- Modal Container -->
     <div id="modal-container"></div>
 
     <script src="script.js"></script>
