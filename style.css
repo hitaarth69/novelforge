@@ -109,7 +109,7 @@ body {
 }
 .create-card:hover { border-color: var(--accent); color: var(--text-primary); }
 
-/* --- Editor (Split Screen) --- */
+/* --- Editor --- */
 .editor-container { display: flex; gap: 1rem; height: 70vh; }
 .editor-pane, .preview-pane {
     flex: 1; background: var(--bg-input); border-radius: var(--radius-sm); 
