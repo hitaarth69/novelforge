@@ -1,5 +1,3 @@
-import { NovelDB } from './db.js';
-
 // ----- DOM Refs -----
 const appContent = document.getElementById('app-content');
 const navTabs = document.querySelectorAll('.nav-tab');
@@ -8,47 +6,90 @@ const themeToggle = document.getElementById('theme-toggle');
 const wordCountDisplay = document.getElementById('word-count-display');
 
 // ----- State -----
-let db = new NovelDB();
 let currentProject = null;
 let currentChapterIndex = 0;
 let currentTab = 'dashboard';
 let isDark = true;
 let autoSaveTimer = null;
 
+// ----- Simple DB (LocalStorage) -----
+function getProjects() {
+    try {
+        return JSON.parse(localStorage.getItem('novelforge_projects')) || [];
+    } catch { return []; }
+}
+
+function saveProject(project) {
+    let projects = getProjects();
+    const index = projects.findIndex(p => p.id === project.id);
+    if (index > -1) {
+        projects[index] = project;
+    } else {
+        projects.push(project);
+    }
+    localStorage.setItem('novelforge_projects', JSON.stringify(projects));
+}
+
+function deleteProject(id) {
+    let projects = getProjects();
+    projects = projects.filter(p => p.id !== id);
+    localStorage.setItem('novelforge_projects', JSON.stringify(projects));
+}
+
+function getProject(id) {
+    const projects = getProjects();
+    return projects.find(p => p.id === id) || null;
+}
+
 // ----- Init -----
-async function init() {
-    await db.init();
-    // Check for last opened project
+function init() {
+    console.log('🚀 NovelForge initializing...');
+    
+    // Load theme
+    const savedTheme = localStorage.getItem('novelforge_theme');
+    if (savedTheme === 'light') {
+        isDark = false;
+        document.documentElement.setAttribute('data-theme', 'light');
+        themeToggle.textContent = '☀️';
+    }
+
+    // Load last project
     const lastId = localStorage.getItem('novelforge_last_project');
     if (lastId) {
-        const project = await db.getProject(lastId);
+        const project = getProject(lastId);
         if (project) currentProject = project;
     }
+
+    // If no project, create default
     if (!currentProject) {
-        // Create a default project
         currentProject = {
             id: Date.now().toString(36),
             title: 'My First Novel',
             chapters: [{ id: 'ch1', title: 'Chapter 1', content: '# Welcome to NovelForge\n\nStart writing your masterpiece here...' }],
             characters: [],
             locations: [],
-            relationships: [],
-            plot: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        await db.saveProject(currentProject);
+        saveProject(currentProject);
         localStorage.setItem('novelforge_last_project', currentProject.id);
     }
-    renderTab('dashboard');
-    updateWordCount();
+
+    // Setup event listeners
     setupEventListeners();
+    
+    // Render default tab
+    renderTab('dashboard');
+    
+    console.log('✅ NovelForge ready!');
 }
 
 // ----- Routing -----
 function renderTab(tab) {
     currentTab = tab;
-    navTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+    navTabs.forEach(t => {
+        t.classList.toggle('active', t.dataset.tab === tab);
+    });
     
     switch(tab) {
         case 'dashboard': renderDashboard(); break;
@@ -56,14 +97,15 @@ function renderTab(tab) {
         case 'world': renderWorld(); break;
         case 'ai': renderAI(); break;
         case 'reader': renderReader(); break;
+        default: renderDashboard();
     }
 }
 
 // ----- Dashboard -----
-async function renderDashboard() {
-    const projects = await db.getProjects();
+function renderDashboard() {
+    const projects = getProjects();
     appContent.innerHTML = `
-        <div class="dashboard-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1.5rem;">
             <h2>📚 Your Projects</h2>
             <button id="create-project-btn" class="tool-btn" style="background:var(--accent);color:#fff;border:none;padding:0.4rem 1.5rem;">+ New Project</button>
         </div>
@@ -73,7 +115,7 @@ async function renderDashboard() {
                     <h3>${p.title}</h3>
                     <p>${p.chapters?.length || 0} chapters</p>
                     <div class="meta">
-                        <span>📝 ${p.chapters?.reduce((sum, c) => sum + (c.content?.split(/\s+/).length || 0), 0) || 0} words</span>
+                        <span>📝 ${countWords(p)} words</span>
                         <span>🕐 ${new Date(p.updatedAt).toLocaleDateString()}</span>
                     </div>
                 </div>
@@ -86,9 +128,9 @@ async function renderDashboard() {
     `;
 
     document.querySelectorAll('.project-card[data-id]').forEach(el => {
-        el.addEventListener('click', async () => {
+        el.addEventListener('click', () => {
             const id = el.dataset.id;
-            const project = await db.getProject(id);
+            const project = getProject(id);
             if (project) {
                 currentProject = project;
                 localStorage.setItem('novelforge_last_project', id);
@@ -97,11 +139,18 @@ async function renderDashboard() {
         });
     });
 
-    document.getElementById('create-project-card').addEventListener('click', () => showCreateProjectModal());
-    document.getElementById('create-project-btn').addEventListener('click', () => showCreateProjectModal());
+    document.getElementById('create-project-card').addEventListener('click', showCreateProjectModal);
+    document.getElementById('create-project-btn').addEventListener('click', showCreateProjectModal);
 }
 
-async function showCreateProjectModal() {
+function countWords(project) {
+    if (!project || !project.chapters) return 0;
+    return project.chapters.reduce((sum, c) => {
+        return sum + (c.content?.split(/\s+/).filter(w => w.length > 0).length || 0);
+    }, 0);
+}
+
+function showCreateProjectModal() {
     modalContainer.innerHTML = `
         <div class="modal-overlay">
             <div class="modal-box">
@@ -114,7 +163,7 @@ async function showCreateProjectModal() {
             </div>
         </div>
     `;
-    document.getElementById('confirm-create-project').addEventListener('click', async () => {
+    document.getElementById('confirm-create-project').addEventListener('click', () => {
         const title = document.getElementById('new-project-title').value.trim() || 'Untitled';
         const project = {
             id: Date.now().toString(36),
@@ -122,12 +171,10 @@ async function showCreateProjectModal() {
             chapters: [{ id: 'ch1', title: 'Chapter 1', content: '# Start writing...' }],
             characters: [],
             locations: [],
-            relationships: [],
-            plot: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
         };
-        await db.saveProject(project);
+        saveProject(project);
         closeModal();
         currentProject = project;
         localStorage.setItem('novelforge_last_project', project.id);
@@ -137,14 +184,17 @@ async function showCreateProjectModal() {
 
 window.closeModal = function() { modalContainer.innerHTML = ''; };
 
-// ----- Editor (Split Screen + Auto-Save) -----
+// ----- Editor -----
 function renderEditor() {
-    if (!currentProject) { appContent.innerHTML = '<p>No project selected. Go to Dashboard.</p>'; return; }
+    if (!currentProject) {
+        appContent.innerHTML = '<p style="color:var(--text-muted);">No project selected. Go to Dashboard.</p>';
+        return;
+    }
     const chapter = currentProject.chapters[currentChapterIndex] || currentProject.chapters[0];
     
     appContent.innerHTML = `
-        <div class="editor-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
-            <div style="display:flex; gap:0.5rem; align-items:center;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
                 <h2 style="font-size:1.2rem;">${currentProject.title}</h2>
                 <select id="chapter-select" style="background:var(--bg-input); border:1px solid var(--border-color); border-radius:40px; padding:0.3rem 1rem; color:var(--text-primary);">
                     ${currentProject.chapters.map((c, i) => `<option value="${i}" ${i === currentChapterIndex ? 'selected' : ''}>${c.title}</option>`).join('')}
@@ -173,82 +223,106 @@ function renderEditor() {
     const wordCount = document.getElementById('editor-word-count');
 
     // Initial render
-    if (preview) preview.innerHTML = marked.parse(textarea.value);
+    if (preview && typeof marked !== 'undefined') {
+        preview.innerHTML = marked.parse(textarea.value);
+    } else if (preview) {
+        preview.innerHTML = textarea.value;
+    }
 
-    // Auto-save on input (with debounce)
+    // Auto-save on input
     textarea.addEventListener('input', () => {
         const content = textarea.value;
         const words = content.split(/\s+/).filter(w => w.length > 0).length;
         if (wordCount) wordCount.textContent = `${words} words`;
-        if (preview) preview.innerHTML = marked.parse(content);
+        if (preview && typeof marked !== 'undefined') {
+            preview.innerHTML = marked.parse(content);
+        } else if (preview) {
+            preview.innerHTML = content;
+        }
         updateWordCount();
         
-        // Auto-save to memory + DB
         clearTimeout(autoSaveTimer);
-        autoSaveTimer = setTimeout(async () => {
+        autoSaveTimer = setTimeout(() => {
             const ch = currentProject.chapters[currentChapterIndex];
             if (ch) {
                 ch.content = content;
-                ch.updatedAt = new Date().toISOString();
                 currentProject.updatedAt = new Date().toISOString();
-                await db.saveProject(currentProject);
-                // Update dashboard badge silently
+                saveProject(currentProject);
             }
         }, 800);
     });
 
     // Chapter Select
-    document.getElementById('chapter-select').addEventListener('change', (e) => {
-        // Save current content first
-        const ch = currentProject.chapters[currentChapterIndex];
-        if (ch) ch.content = textarea.value;
-        currentChapterIndex = parseInt(e.target.value);
-        renderEditor();
-    });
+    const select = document.getElementById('chapter-select');
+    if (select) {
+        select.addEventListener('change', (e) => {
+            const ch = currentProject.chapters[currentChapterIndex];
+            if (ch) ch.content = textarea.value;
+            currentChapterIndex = parseInt(e.target.value);
+            renderEditor();
+        });
+    }
 
     // Add Chapter
-    document.getElementById('add-chapter-btn').addEventListener('click', () => {
-        const title = prompt('Chapter title:');
-        if (title) {
-            currentProject.chapters.push({ id: 'ch' + Date.now(), title: title.trim(), content: '# ' + title.trim() });
-            currentChapterIndex = currentProject.chapters.length - 1;
-            db.saveProject(currentProject);
-            renderEditor();
-        }
-    });
+    const addBtn = document.getElementById('add-chapter-btn');
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            const title = prompt('Chapter title:');
+            if (title && title.trim()) {
+                currentProject.chapters.push({ 
+                    id: 'ch' + Date.now(), 
+                    title: title.trim(), 
+                    content: '# ' + title.trim() 
+                });
+                currentChapterIndex = currentProject.chapters.length - 1;
+                saveProject(currentProject);
+                renderEditor();
+            }
+        });
+    }
 
     // Export MD
-    document.getElementById('export-md-btn').addEventListener('click', () => {
-        let fullText = `# ${currentProject.title}\n\n`;
-        currentProject.chapters.forEach(c => {
-            fullText += `## ${c.title}\n\n${c.content}\n\n`;
+    const exportBtn = document.getElementById('export-md-btn');
+    if (exportBtn) {
+        exportBtn.addEventListener('click', () => {
+            let fullText = `# ${currentProject.title}\n\n`;
+            currentProject.chapters.forEach(c => {
+                fullText += `## ${c.title}\n\n${c.content}\n\n`;
+            });
+            const blob = new Blob([fullText], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentProject.title.replace(/\s+/g, '_')}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
         });
-        const blob = new Blob([fullText], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${currentProject.title.replace(/\s+/g, '_')}.md`;
-        a.click();
-        URL.revokeObjectURL(url);
-    });
+    }
 
-    document.getElementById('save-project-btn').addEventListener('click', async () => {
-        const ch = currentProject.chapters[currentChapterIndex];
-        if (ch) ch.content = textarea.value;
-        await db.saveProject(currentProject);
-        alert('✅ Project saved!');
-    });
+    // Save button
+    const saveBtn = document.getElementById('save-project-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const ch = currentProject.chapters[currentChapterIndex];
+            if (ch) ch.content = textarea.value;
+            saveProject(currentProject);
+            alert('✅ Project saved!');
+        });
+    }
 }
 
 function updateWordCount() {
-    if (!currentProject) return;
-    const total = currentProject.chapters.reduce((sum, c) => sum + (c.content?.split(/\s+/).filter(w => w.length > 0).length || 0), 0);
-    if (wordCountDisplay) wordCountDisplay.textContent = `${total} words`;
+    if (!currentProject || !wordCountDisplay) return;
+    const total = countWords(currentProject);
+    wordCountDisplay.textContent = `${total} words`;
 }
 
-// ----- World Builder (Characters) -----
+// ----- World Builder -----
 function renderWorld() {
-    if (!currentProject) { appContent.innerHTML = '<p>No project selected.</p>'; return; }
+    if (!currentProject) {
+        appContent.innerHTML = '<p style="color:var(--text-muted);">No project selected.</p>';
+        return;
+    }
     const chars = currentProject.characters || [];
 
     appContent.innerHTML = `
@@ -272,20 +346,20 @@ function renderWorld() {
                 `).join('')}
             </div>
             <div class="locations-list">
-                <h3>📍 Locations (Coming Soon)</h3>
-                <p style="color:var(--text-muted);">Location tracking will be added in the next update.</p>
+                <h3>📍 Locations</h3>
+                <p style="color:var(--text-muted);">Location tracking coming soon.</p>
             </div>
         </div>
     `;
 
-    document.getElementById('add-character-btn').addEventListener('click', () => showAddCharacterModal());
+    document.getElementById('add-character-btn').addEventListener('click', showAddCharacterModal);
 
     document.querySelectorAll('.delete-char-btn').forEach(btn => {
-        btn.addEventListener('click', async () => {
+        btn.addEventListener('click', () => {
             const idx = parseInt(btn.dataset.index);
             if (confirm(`Delete "${currentProject.characters[idx].name}"?`)) {
                 currentProject.characters.splice(idx, 1);
-                await db.saveProject(currentProject);
+                saveProject(currentProject);
                 renderWorld();
             }
         });
@@ -307,7 +381,7 @@ function showAddCharacterModal() {
             </div>
         </div>
     `;
-    document.getElementById('confirm-add-char').addEventListener('click', async () => {
+    document.getElementById('confirm-add-char').addEventListener('click', () => {
         const name = document.getElementById('char-name').value.trim();
         if (!name) return alert('Name is required.');
         currentProject.characters.push({
@@ -316,13 +390,13 @@ function showAddCharacterModal() {
             role: document.getElementById('char-role').value.trim() || 'Unknown',
             description: document.getElementById('char-desc').value.trim(),
         });
-        await db.saveProject(currentProject);
+        saveProject(currentProject);
         closeModal();
         renderWorld();
     });
 }
 
-// ----- AI Assistant (The "Co-Pilot") -----
+// ----- AI Assistant -----
 function renderAI() {
     const apiKey = localStorage.getItem('openai_api_key') || '';
     
@@ -349,11 +423,11 @@ function renderAI() {
                 <button id="ai-save-key" class="tool-btn" style="margin-top:0.5rem;border-color:var(--success);color:var(--success);">Save Key</button>
                 <hr style="border-color:var(--border-color);margin:1rem 0;" />
                 <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
-                    <button class="tool-btn ai-quick" data-prompt="Continue this scene in a dramatic way">🎭 Continue Scene</button>
-                    <button class="tool-btn ai-quick" data-prompt="Rewrite this to be more suspenseful">⚡ Add Suspense</button>
-                    <button class="tool-btn ai-quick" data-prompt="Describe the setting in vivid detail">🌅 Describe Setting</button>
+                    <button class="tool-btn ai-quick" data-prompt="Continue this scene in a dramatic way">🎭 Continue</button>
+                    <button class="tool-btn ai-quick" data-prompt="Rewrite this to be more suspenseful">⚡ Suspense</button>
+                    <button class="tool-btn ai-quick" data-prompt="Describe the setting in vivid detail">🌅 Describe</button>
                 </div>
-                <p style="font-size:0.6rem;color:var(--text-muted);margin-top:0.5rem;">💡 Your key is stored locally in your browser. Never shared.</p>
+                <p style="font-size:0.6rem;color:var(--text-muted);margin-top:0.5rem;">💡 Your key is stored locally. Never shared.</p>
             </div>
         </div>
     `;
@@ -368,7 +442,6 @@ function renderAI() {
 
     document.querySelectorAll('.ai-quick').forEach(btn => {
         btn.addEventListener('click', () => {
-            // Get current editor text
             const textarea = document.getElementById('editor-textarea');
             let context = '';
             if (textarea) context = textarea.value.substring(0, 1500);
@@ -392,18 +465,17 @@ async function sendAIMessage() {
     const messagesEl = document.getElementById('ai-messages');
     const prompt = promptEl.value.trim();
     if (!prompt) return;
+    
     const apiKey = localStorage.getItem('openai_api_key');
     if (!apiKey) {
         alert('Please set your OpenAI API key in the settings panel.');
         return;
     }
 
-    // Add user message
     messagesEl.innerHTML += `<div class="ai-message user">${prompt}</div>`;
     promptEl.value = '';
     messagesEl.scrollTop = messagesEl.scrollHeight;
 
-    // Add loading
     const loadingId = 'loading-' + Date.now();
     messagesEl.innerHTML += `<div class="ai-message assistant" id="${loadingId}">⏳ Thinking...</div>`;
     messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -418,7 +490,7 @@ async function sendAIMessage() {
             body: JSON.stringify({
                 model: 'gpt-3.5-turbo',
                 messages: [
-                    { role: 'system', content: 'You are a helpful writing assistant for novelists. You help with brainstorming, rewriting, and continuing stories. Keep responses concise and useful.' },
+                    { role: 'system', content: 'You are a helpful writing assistant for novelists. Help with brainstorming, rewriting, and continuing stories. Keep responses concise and useful.' },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.7,
@@ -435,7 +507,6 @@ async function sendAIMessage() {
         } else {
             const reply = data.choices[0].message.content;
             messagesEl.innerHTML += `<div class="ai-message assistant">${reply}</div>`;
-            // Add an "Insert" button
             messagesEl.innerHTML += `<div style="text-align:right;margin-top:-0.3rem;margin-bottom:0.8rem;">
                 <button class="tool-btn insert-ai-btn" style="font-size:0.6rem;border-color:var(--accent);color:var(--accent);" data-text="${encodeURIComponent(reply)}">📥 Insert into Editor</button>
             </div>`;
@@ -463,15 +534,23 @@ async function sendAIMessage() {
 
 // ----- Reader Mode -----
 function renderReader() {
-    if (!currentProject) { appContent.innerHTML = '<p>No project selected.</p>'; return; }
+    if (!currentProject) {
+        appContent.innerHTML = '<p style="color:var(--text-muted);">No project selected.</p>';
+        return;
+    }
     let fullText = `# ${currentProject.title}\n\n`;
     currentProject.chapters.forEach(c => {
         fullText += `## ${c.title}\n\n${c.content}\n\n`;
     });
 
+    let renderedHtml = fullText;
+    if (typeof marked !== 'undefined') {
+        renderedHtml = marked.parse(fullText);
+    }
+
     appContent.innerHTML = `
         <div class="reader-container">
-            ${marked.parse(fullText)}
+            ${renderedHtml}
         </div>
     `;
 }
@@ -479,7 +558,9 @@ function renderReader() {
 // ----- Event Listeners -----
 function setupEventListeners() {
     navTabs.forEach(tab => {
-        tab.addEventListener('click', () => renderTab(tab.dataset.tab));
+        tab.addEventListener('click', () => {
+            renderTab(tab.dataset.tab);
+        });
     });
 
     themeToggle.addEventListener('click', () => {
@@ -488,15 +569,7 @@ function setupEventListeners() {
         themeToggle.textContent = isDark ? '🌙' : '☀️';
         localStorage.setItem('novelforge_theme', isDark ? 'dark' : 'light');
     });
-
-    // Load theme preference
-    const savedTheme = localStorage.getItem('novelforge_theme');
-    if (savedTheme === 'light') {
-        isDark = false;
-        document.documentElement.setAttribute('data-theme', 'light');
-        themeToggle.textContent = '☀️';
-    }
 }
 
 // ----- Start the App -----
-init();
+document.addEventListener('DOMContentLoaded', init);
